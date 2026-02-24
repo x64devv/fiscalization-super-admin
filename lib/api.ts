@@ -85,7 +85,23 @@ export interface SystemStats {
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
+export interface AdminUser {
+  id: number; username: string; personName: string; personSurname: string;
+  userRole: string; email: string; phoneNo: string; status: number; createdAt: string;
+}
+
+export interface CreateCompanyUserReq {
+  username: string; password: string; personName: string; personSurname: string;
+  userRole: string; email: string; phoneNo: string;
+}
+
 export const adminApi = {
+  listCompanyUsers: (id: number) =>
+  http.get<{ total: number; rows: AdminUser[] }>(`/api/admin/companies/${id}/users`).then(r => r.data),
+
+  createCompanyUser: (id: number, data: CreateCompanyUserReq) =>
+  http.post<AdminUser>(`/api/admin/companies/${id}/users`, data).then(r => r.data),
+
   login: (data: AdminLoginRequest) =>
     http.post<AdminLoginResponse>('/api/admin/login', data).then(r => r.data),
 

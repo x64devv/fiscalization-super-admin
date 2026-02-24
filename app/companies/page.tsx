@@ -1,11 +1,11 @@
 'use client';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Building2, Plus, Search, Eye, CheckCircle2, XCircle, MonitorSmartphone, Pencil } from 'lucide-react';
+import { Building2, Plus, Search, Eye, CheckCircle2, XCircle, MonitorSmartphone, Pencil, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import AdminTopBar from '@/components/layout/AdminTopBar';
 import { Badge, KpiCard, SectionHeader, Modal, Field, EmptyState, Spinner } from '@/components/ui';
-import { adminApi, type Taxpayer, type Device } from '@/lib/api';
+import { adminApi, type Taxpayer, type Device, type AdminUser, type CreateCompanyUserReq } from '@/lib/api';
 import { formatDate, companyStatusBadge, deviceStatusBadge, deviceModeLabel } from '@/lib/utils';
 
 const EMPTY_FORM = { tin: '', name: '', vatNumber: '', taxPayerDayMaxHrs: 24, taxpayerDayEndNotificationHrs: 2, qrUrl: 'https://receipt.zimra.co.zw' };
@@ -18,6 +18,9 @@ export default function CompaniesPage() {
   const [showEdit, setShowEdit] = useState<Taxpayer | null>(null);
   const [showDetail, setShowDetail] = useState<Taxpayer | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [showUsers, setShowUsers] = useState<Taxpayer | null>(null);
+  const [showCreateUser, setShowCreateUser] = useState(false);
+  const [userForm, setUserForm] = useState({ username: '', password: '', personName: '', personSurname: '', userRole: 'Operator', email: '', phoneNo: '' });
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-companies', page, search],
@@ -30,6 +33,24 @@ export default function CompaniesPage() {
     queryFn: () => adminApi.listCompanyDevices(showDetail!.id),
     enabled: !!showDetail,
     retry: false,
+  });
+
+  const { data: companyUsers, refetch: refetchUsers } = useQuery({
+    queryKey: ['company-users', showUsers?.id],
+    queryFn: () => adminApi.listCompanyUsers(showUsers!.id),
+    enabled: !!showUsers,
+    retry: false,
+  });
+
+  const createUser = useMutation({
+    mutationFn: () => adminApi.createCompanyUser(showUsers!.id, userForm),
+    onSuccess: (u) => {
+      toast.success(`User ${u.username} created`);
+      setShowCreateUser(false);
+      setUserForm({ username: '', password: '', personName: '', personSurname: '', userRole: 'Operator', email: '', phoneNo: '' });
+      refetchUsers();
+    },
+    onError: (e: any) => toast.error(e?.response?.data?.title ?? 'Failed to create user'),
   });
 
   const create = useMutation({
@@ -61,9 +82,9 @@ export default function CompaniesPage() {
 
       <div className="flex-1 p-7 space-y-6">
         <div className="grid grid-cols-3 gap-4">
-          <KpiCard label="Total Companies" value={total} accent="amber" icon={<Building2 className="w-4 h-4"/>} />
-          <KpiCard label="Active" value={active} accent="green" icon={<CheckCircle2 className="w-4 h-4"/>} />
-          <KpiCard label="Inactive" value={total - active} accent="red" icon={<XCircle className="w-4 h-4"/>} />
+          <KpiCard label="Total Companies" value={total} accent="amber" icon={<Building2 className="w-4 h-4" />} />
+          <KpiCard label="Active" value={active} accent="green" icon={<CheckCircle2 className="w-4 h-4" />} />
+          <KpiCard label="Inactive" value={total - active} accent="red" icon={<XCircle className="w-4 h-4" />} />
         </div>
 
         <div className="card">
@@ -80,7 +101,7 @@ export default function CompaniesPage() {
             <div className="flex justify-center py-16"><Spinner /></div>
           ) : companies.length === 0 ? (
             <EmptyState title="No companies yet" description="Click 'Onboard Company' to register the first taxpayer."
-              action={<button onClick={() => setShowCreate(true)} className="btn btn-primary text-xs"><Plus className="w-3.5 h-3.5"/>Onboard Company</button>}
+              action={<button onClick={() => setShowCreate(true)} className="btn btn-primary text-xs"><Plus className="w-3.5 h-3.5" />Onboard Company</button>}
               icon={<Building2 className="w-6 h-6" />} />
           ) : (
             <>
@@ -97,11 +118,14 @@ export default function CompaniesPage() {
                       <td className="text-muted text-xs font-mono">{formatDate(c.created_at)}</td>
                       <td>
                         <div className="flex items-center gap-1">
-                          <button onClick={() => setShowDetail(c)} className="p-1.5 rounded text-muted hover:text-[var(--info)] hover:bg-[var(--info-dim)] transition-colors" title="View details"><Eye className="w-3.5 h-3.5"/></button>
-                          <button onClick={() => setShowEdit({ ...c })} className="p-1.5 rounded text-muted hover:text-[var(--accent)] hover:bg-[var(--accent-dim)] transition-colors" title="Edit"><Pencil className="w-3.5 h-3.5"/></button>
+                          <button onClick={() => setShowUsers(c)} className="p-1.5 rounded text-muted hover:text-[var(--success)] hover:bg-[var(--success-dim)] transition-colors" title="Manage users">
+                            <User className="w-3.5 h-3.5" />
+                          </button>
+                          <button onClick={() => setShowDetail(c)} className="p-1.5 rounded text-muted hover:text-[var(--info)] hover:bg-[var(--info-dim)] transition-colors" title="View details"><Eye className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => setShowEdit({ ...c })} className="p-1.5 rounded text-muted hover:text-[var(--accent)] hover:bg-[var(--accent-dim)] transition-colors" title="Edit"><Pencil className="w-3.5 h-3.5" /></button>
                           {c.status === 'Active'
-                            ? <button onClick={() => setStatus.mutate({ id: c.id, status: 'Inactive' })} className="p-1.5 rounded text-muted hover:text-[var(--accent2)] hover:bg-[var(--accent2-dim)] transition-colors" title="Deactivate"><XCircle className="w-3.5 h-3.5"/></button>
-                            : <button onClick={() => setStatus.mutate({ id: c.id, status: 'Active' })} className="p-1.5 rounded text-muted hover:text-[var(--success)] hover:bg-[var(--success-dim)] transition-colors" title="Activate"><CheckCircle2 className="w-3.5 h-3.5"/></button>}
+                            ? <button onClick={() => setStatus.mutate({ id: c.id, status: 'Inactive' })} className="p-1.5 rounded text-muted hover:text-[var(--accent2)] hover:bg-[var(--accent2-dim)] transition-colors" title="Deactivate"><XCircle className="w-3.5 h-3.5" /></button>
+                            : <button onClick={() => setStatus.mutate({ id: c.id, status: 'Active' })} className="p-1.5 rounded text-muted hover:text-[var(--success)] hover:bg-[var(--success-dim)] transition-colors" title="Activate"><CheckCircle2 className="w-3.5 h-3.5" /></button>}
                         </div>
                       </td>
                     </tr>
@@ -128,15 +152,15 @@ export default function CompaniesPage() {
             <p className="text-xs text-[var(--accent)]">After creating the company, provision devices from the Devices section and provide the activation keys to the client.</p>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="TIN (10 digits)"><input className="input font-mono" maxLength={10} value={form.tin} onChange={e => setForm({...form, tin: e.target.value})} placeholder="1234567890" /></Field>
-            <Field label="VAT Number (optional)"><input className="input font-mono" maxLength={9} value={form.vatNumber} onChange={e => setForm({...form, vatNumber: e.target.value})} placeholder="123456789" /></Field>
+            <Field label="TIN (10 digits)"><input className="input font-mono" maxLength={10} value={form.tin} onChange={e => setForm({ ...form, tin: e.target.value })} placeholder="1234567890" /></Field>
+            <Field label="VAT Number (optional)"><input className="input font-mono" maxLength={9} value={form.vatNumber} onChange={e => setForm({ ...form, vatNumber: e.target.value })} placeholder="123456789" /></Field>
           </div>
-          <Field label="Registered Company Name"><input className="input" value={form.name} onChange={e => setForm({...form, name: e.target.value})} placeholder="ABC Retail Store Ltd" /></Field>
+          <Field label="Registered Company Name"><input className="input" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="ABC Retail Store Ltd" /></Field>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Fiscal Day Max Hours"><input type="number" className="input font-mono" value={form.taxPayerDayMaxHrs} onChange={e => setForm({...form, taxPayerDayMaxHrs: Number(e.target.value)})} min={1} max={48} /></Field>
-            <Field label="End Notification (hrs before)"><input type="number" className="input font-mono" value={form.taxpayerDayEndNotificationHrs} onChange={e => setForm({...form, taxpayerDayEndNotificationHrs: Number(e.target.value)})} min={0} max={12} /></Field>
+            <Field label="Fiscal Day Max Hours"><input type="number" className="input font-mono" value={form.taxPayerDayMaxHrs} onChange={e => setForm({ ...form, taxPayerDayMaxHrs: Number(e.target.value) })} min={1} max={48} /></Field>
+            <Field label="End Notification (hrs before)"><input type="number" className="input font-mono" value={form.taxpayerDayEndNotificationHrs} onChange={e => setForm({ ...form, taxpayerDayEndNotificationHrs: Number(e.target.value) })} min={0} max={12} /></Field>
           </div>
-          <Field label="QR Receipt URL"><input className="input font-mono text-xs" value={form.qrUrl} onChange={e => setForm({...form, qrUrl: e.target.value})} /></Field>
+          <Field label="QR Receipt URL"><input className="input font-mono text-xs" value={form.qrUrl} onChange={e => setForm({ ...form, qrUrl: e.target.value })} /></Field>
           <div className="flex gap-3 pt-2">
             <button onClick={() => setShowCreate(false)} className="btn btn-secondary flex-1">Cancel</button>
             <button onClick={() => create.mutate()} disabled={create.isPending || !form.tin || !form.name} className="btn btn-primary flex-1">
@@ -150,18 +174,18 @@ export default function CompaniesPage() {
       <Modal open={!!showEdit} onClose={() => setShowEdit(null)} title={`Edit: ${showEdit?.name}`} size="md">
         {showEdit && (
           <div className="space-y-4">
-            <Field label="Company Name"><input className="input" value={showEdit.name} onChange={e => setShowEdit({...showEdit, name: e.target.value})} /></Field>
-            <Field label="VAT Number"><input className="input font-mono" value={showEdit.vat_number ?? ''} onChange={e => setShowEdit({...showEdit, vat_number: e.target.value || undefined})} /></Field>
+            <Field label="Company Name"><input className="input" value={showEdit.name} onChange={e => setShowEdit({ ...showEdit, name: e.target.value })} /></Field>
+            <Field label="VAT Number"><input className="input font-mono" value={showEdit.vat_number ?? ''} onChange={e => setShowEdit({ ...showEdit, vat_number: e.target.value || undefined })} /></Field>
             <Field label="Status">
-              <select className="input" value={showEdit.status} onChange={e => setShowEdit({...showEdit, status: e.target.value})}>
+              <select className="input" value={showEdit.status} onChange={e => setShowEdit({ ...showEdit, status: e.target.value })}>
                 <option>Active</option><option>Inactive</option>
               </select>
             </Field>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Day Max Hours"><input type="number" className="input font-mono" value={showEdit.taxpayer_day_max_hrs} onChange={e => setShowEdit({...showEdit, taxpayer_day_max_hrs: Number(e.target.value)})} /></Field>
-              <Field label="Notification Hours"><input type="number" className="input font-mono" value={showEdit.taxpayer_day_end_notification_hrs} onChange={e => setShowEdit({...showEdit, taxpayer_day_end_notification_hrs: Number(e.target.value)})} /></Field>
+              <Field label="Day Max Hours"><input type="number" className="input font-mono" value={showEdit.taxpayer_day_max_hrs} onChange={e => setShowEdit({ ...showEdit, taxpayer_day_max_hrs: Number(e.target.value) })} /></Field>
+              <Field label="Notification Hours"><input type="number" className="input font-mono" value={showEdit.taxpayer_day_end_notification_hrs} onChange={e => setShowEdit({ ...showEdit, taxpayer_day_end_notification_hrs: Number(e.target.value) })} /></Field>
             </div>
-            <Field label="QR URL"><input className="input font-mono text-xs" value={showEdit.qr_url} onChange={e => setShowEdit({...showEdit, qr_url: e.target.value})} /></Field>
+            <Field label="QR URL"><input className="input font-mono text-xs" value={showEdit.qr_url} onChange={e => setShowEdit({ ...showEdit, qr_url: e.target.value })} /></Field>
             <div className="flex gap-3 pt-2">
               <button onClick={() => setShowEdit(null)} className="btn btn-secondary flex-1">Cancel</button>
               <button onClick={() => update.mutate()} disabled={update.isPending} className="btn btn-primary flex-1">{update.isPending ? 'Saving…' : 'Save Changes'}</button>
@@ -176,7 +200,7 @@ export default function CompaniesPage() {
           <div className="space-y-5">
             {/* Details */}
             <div className="grid grid-cols-2 gap-3">
-              {[['ID', String(showDetail.id)], ['TIN', showDetail.tin], ['VAT No.', showDetail.vat_number ?? '—'], ['Status', showDetail.status], ['Day Max', `${showDetail.taxpayer_day_max_hrs}h`], ['Notification', `${showDetail.taxpayer_day_end_notification_hrs}h before`], ['QR URL', showDetail.qr_url], ['Registered', formatDate(showDetail.created_at)]].map(([k,v]) => (
+              {[['ID', String(showDetail.id)], ['TIN', showDetail.tin], ['VAT No.', showDetail.vat_number ?? '—'], ['Status', showDetail.status], ['Day Max', `${showDetail.taxpayer_day_max_hrs}h`], ['Notification', `${showDetail.taxpayer_day_end_notification_hrs}h before`], ['QR URL', showDetail.qr_url], ['Registered', formatDate(showDetail.created_at)]].map(([k, v]) => (
                 <div key={k} className="p-3 rounded-lg bg-[var(--surface2)] border border-[var(--border)]">
                   <p className="label">{k}</p>
                   <p className="text-sm font-mono font-semibold truncate">{v}</p>
@@ -195,11 +219,11 @@ export default function CompaniesPage() {
                 <table className="data-table">
                   <thead><tr><th>ID</th><th>Serial</th><th>Branch</th><th>Mode</th><th>Status</th></tr></thead>
                   <tbody>
-                    {(companyDevices?.rows?? []).map(d => (
+                    {(companyDevices?.rows ?? []).map(d => (
                       <tr key={d.device_id}>
                         <td className="font-mono text-xs text-[var(--accent)]">#{d.device_id}</td>
                         <td className="font-mono text-xs">{d.device_serial_no}</td>
-                        <td className="text-sm">{d.branch_name}<br/><span className="text-xs text-muted">{d.branch_address?.city}, {d.branch_address?.province}</span></td>
+                        <td className="text-sm">{d.branch_name}<br /><span className="text-xs text-muted">{d.branch_address?.city}, {d.branch_address?.province}</span></td>
                         <td><Badge variant={d.operating_mode === 0 ? 'blue' : 'yellow'}>{deviceModeLabel(d.operating_mode)}</Badge></td>
                         <td><Badge variant={deviceStatusBadge(d.status)}>{d.status}</Badge></td>
                       </tr>
@@ -210,6 +234,84 @@ export default function CompaniesPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal open={!!showUsers} onClose={() => setShowUsers(null)} title={`Users — ${showUsers?.name}`} size="lg">
+        {showUsers && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted">{companyUsers?.total ?? 0} user{companyUsers?.total !== 1 ? 's' : ''} registered</p>
+              <button onClick={() => setShowCreateUser(true)} className="btn btn-primary text-xs">
+                <Plus className="w-3.5 h-3.5" />Create First User
+              </button>
+            </div>
+
+            {(companyUsers?.rows ?? []).length === 0 ? (
+              <div className="p-6 rounded-lg bg-[var(--surface2)] border border-[var(--border)] text-center">
+                <p className="text-sm text-muted">No users yet.</p>
+                <p className="text-xs text-muted mt-1">Create the first user to give this company access to the client dashboard.</p>
+              </div>
+            ) : (
+              <table className="data-table">
+                <thead><tr><th>Username</th><th>Name</th><th>Role</th><th>Email</th><th>Phone</th><th>Status</th></tr></thead>
+                <tbody>
+                  {(companyUsers?.rows ?? []).map(u => (
+                    <tr key={u.id}>
+                      <td className="font-mono text-xs text-[var(--accent)]">{u.username}</td>
+                      <td className="text-sm">{u.personName} {u.personSurname}</td>
+                      <td><Badge variant="blue">{u.userRole}</Badge></td>
+                      <td className="text-xs text-muted">{u.email}</td>
+                      <td className="text-xs text-muted">{u.phoneNo}</td>
+                      <td><Badge variant={u.status === 0 ? 'green' : 'red'}>{u.status === 0 ? 'Active' : 'Inactive'}</Badge></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+
+            {/* Credentials reminder */}
+            <div className="p-3 rounded-lg bg-[var(--accent-dim)] border border-[var(--accent)]/30">
+              <p className="text-xs text-[var(--accent)] font-bold mb-1">What to give the client:</p>
+              <p className="text-xs text-[var(--accent)]">
+                API URL · Device ID · Activation Key · Username · Password
+              </p>
+              <p className="text-xs text-muted mt-1">They log in at <code className="font-mono">localhost:3000</code> using Device ID + Username + Password</p>
+            </div>
+          </div>
+        )}
+      </Modal>
+      {/*Create user company*/}
+
+      <Modal open={showCreateUser} onClose={() => setShowCreateUser(false)} title="Create Company User" size="md">
+        <div className="space-y-4">
+          <div className="p-3 rounded-lg bg-[var(--accent-dim)] border border-[var(--accent)]/30">
+            <p className="text-xs text-[var(--accent)]">This user will be created as <strong>Active</strong> immediately — no confirmation step. Give the username and password directly to the company.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="First Name"><input className="input" value={userForm.personName} onChange={e => setUserForm({ ...userForm, personName: e.target.value })} /></Field>
+            <Field label="Surname"><input className="input" value={userForm.personSurname} onChange={e => setUserForm({ ...userForm, personSurname: e.target.value })} /></Field>
+          </div>
+          <Field label="Username"><input className="input font-mono" value={userForm.username} onChange={e => setUserForm({ ...userForm, username: e.target.value })} placeholder="e.g. john.doe" /></Field>
+          <Field label="Initial Password"><input className="input font-mono" type="password" value={userForm.password} onChange={e => setUserForm({ ...userForm, password: e.target.value })} placeholder="Strong password" /></Field>
+          <Field label="Role">
+            <select className="input" value={userForm.userRole} onChange={e => setUserForm({ ...userForm, userRole: e.target.value })}>
+              <option>Manager</option>
+              <option>Operator</option>
+              <option>Accountant</option>
+              <option>Admin</option>
+            </select>
+          </Field>
+          <Field label="Email"><input className="input" type="email" value={userForm.email} onChange={e => setUserForm({ ...userForm, email: e.target.value })} /></Field>
+          <Field label="Phone"><input className="input font-mono" value={userForm.phoneNo} onChange={e => setUserForm({ ...userForm, phoneNo: e.target.value })} placeholder="+263..." /></Field>
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => setShowCreateUser(false)} className="btn btn-secondary flex-1">Cancel</button>
+            <button onClick={() => createUser.mutate()}
+              disabled={createUser.isPending || !userForm.username || !userForm.password || !userForm.personName || !userForm.email}
+              className="btn btn-primary flex-1">
+              {createUser.isPending ? 'Creating…' : 'Create User'}
+            </button>
+          </div>
+        </div>
       </Modal>
     </>
   );
